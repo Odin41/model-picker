@@ -115,7 +115,7 @@ git remote add origin https://github.com/Odin41/model-picker.git
 git push -u origin main
 ```
 
-3. Замените в этом README `Odin41/model-picker` на настоящий адрес.
+3. Адрес репозитория в этом README уже подставлен.
 
 Репозиторий может быть приватным: тогда установить плагин смогут только те, у кого есть к нему доступ.
 
