@@ -19,6 +19,9 @@ rem --- Проверка плагина (необязательно) ---
 set "CLAUDE="
 where claude >nul 2>nul && set "CLAUDE=claude"
 if not defined CLAUDE (
+  for /f "delims=" %%F in ('dir /b /s /o-d "%LOCALAPPDATA%\Claude-Data\claude.exe" 2^>nul ^| findstr /i "\\claude-code\\"') do set "CLAUDE=%%F"
+)
+if not defined CLAUDE (
   for /f "delims=" %%F in ('dir /b /s /o-d "%APPDATA%\Claude\claude-code\claude.exe" 2^>nul') do if not defined CLAUDE set "CLAUDE=%%F"
 )
 if defined CLAUDE (
