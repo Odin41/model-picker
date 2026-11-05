@@ -3,7 +3,7 @@
   "displayName": "Model Picker",
   "description": "Подбирает модель и effort под сложность задачи для новых сессий и сабагентов, держит правило «одна задача — одна сессия» и предупреждает, когда контекст сессии разросся.",
   "author": {
-    "name": "odin"
+    "name": "Nikolay Barakov"
   },
   "license": "MIT",
   "keywords": ["model", "effort", "cost", "sessions", "context"]

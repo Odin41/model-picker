@@ -2,7 +2,7 @@
   "name": "model-picker-hub",
   "description": "Плагины для экономного Claude Code: модель и effort по задаче, короткие сессии",
   "owner": {
-    "name": "odin"
+    "name": "Nikolay Barakov"
   },
   "plugins": [
     {
