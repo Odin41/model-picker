@@ -1,0 +1,10 @@
+# Единые переводы строк (LF) у всех: хук запускается и на Windows, и на macOS/Linux.
+* text=auto eol=lf
+
+# Не класть служебные файлы гита в архив для раздачи (git archive)
+.gitignore export-ignore
+.gitattributes export-ignore
+
+*.png binary
+*.jpg binary
+*.zip binary

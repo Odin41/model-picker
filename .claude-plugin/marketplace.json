@@ -1,0 +1,14 @@
+{
+  "name": "model-picker-hub",
+  "description": "Плагины для экономного Claude Code: модель и effort по задаче, короткие сессии",
+  "owner": {
+    "name": "odin"
+  },
+  "plugins": [
+    {
+      "name": "model-picker",
+      "source": "./",
+      "description": "Модель и effort по сложности задачи + сторож длинных сессий"
+    }
+  ]
+}

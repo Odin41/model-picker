@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Состояние хука-сторожа (появляется, если плагин запущен прямо из этой папки)
+.context_guard.json
+*.tmp
+
+# Собранные архивы для раздачи
+dist/
+*.zip
+
+# Системный мусор и редакторы
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
