@@ -20,7 +20,7 @@
 Нужен Claude Code в терминале (`claude`). Выполните в обычном терминале:
 
 ```bash
-claude plugin marketplace add ВЛАДЕЛЕЦ/РЕПОЗИТОРИЙ
+claude plugin marketplace add Odin41/model-picker
 claude plugin install model-picker@model-picker-hub
 ```
 
@@ -111,11 +111,11 @@ claude plugin validate .
 git init -b main
 git add .
 git commit -m "model-picker: первая версия"
-git remote add origin https://github.com/ВЛАДЕЛЕЦ/РЕПОЗИТОРИЙ.git
+git remote add origin https://github.com/Odin41/model-picker.git
 git push -u origin main
 ```
 
-3. Замените в этом README `ВЛАДЕЛЕЦ/РЕПОЗИТОРИЙ` на настоящий адрес.
+3. Замените в этом README `Odin41/model-picker` на настоящий адрес.
 
 Репозиторий может быть приватным: тогда установить плагин смогут только те, у кого есть к нему доступ.
 
