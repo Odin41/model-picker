@@ -1,87 +1,60 @@
 ---
 name: pick-model
-description: "Выбор модели и effort под сложность задачи и правило «одна задача — одна сессия». ОБЯЗАТЕЛЬНО загружай ПЕРЕД каждым start_session и каждым запуском сабагента (Agent) — без этого скилла сессии и сабагентов не запускать; загружай также, когда задача сделана и пора предложить следующую, когда сторож сообщил о длинном контексте и когда пользователь спрашивает, какую модель или effort взять."
+description: "Pick model and effort by task difficulty, and the one-task-one-session rule. MANDATORY: load BEFORE every start_session and every subagent (Agent) launch; do not start sessions or subagents without this skill. Also load when a task is done and the next one should be offered, when the watchdog reports a long context, and when the user asks which model or effort to use."
 ---
 
-# Модель и effort — по задаче
+# Model and effort by task
 
-**Без этого скилла сессии не запускать.** Скилл загружается до каждого `start_session` и каждого `Agent`.
+**Never start sessions without this skill.** Load it before every `start_session` and every `Agent`.
 
-Цель — самая дешёвая модель, которая сделает задачу с первого раза. Переделка обходится дороже, чем сразу взять
-ступень повыше, поэтому при сомнении — на одну ступень выше, но не сразу на самый верх.
+Goal: the cheapest model that does the task right the first time. Redoing costs more than going one step up, so when unsure go one step higher, not straight to the top.
 
-## Лестница
+## Ladder
 
-| Ступень | Задача | Модель | Effort |
+| Step | Task | Model | Effort |
 |---|---|---|---|
-| 1 | Вопрос, поиск и чтение кода, переименование, правка документа, отчёт по готовым данным | `claude-haiku-5-5` | `low` |
-| 2 | Работа по образцу: контент, шаблоны, мелкий баг с понятной причиной, тесты к готовому коду | `claude-sonnet-5-5` | `medium` |
-| 3 | Обычная фича в нескольких файлах, баг с неясной причиной, перенос логики по готовому источнику | `claude-sonnet-5-5` | `high` |
-| 4 | Архитектура, сложные механики и алгоритмы, деньги и данные пользователей (игроков), безопасность, проверка чужой работы при высокой цене ошибки | `claude-opus-5-5` | `high` |
+| 1 | Question, search and reading code, rename, edit a document, report from ready data | `claude-haiku-5-5` | `low` |
+| 2 | Work from a pattern: content, templates, small bug with a clear cause, tests for existing code | `claude-sonnet-5-5` | `medium` |
+| 3 | Ordinary multi-file feature, bug with unclear cause, porting logic from a ready source | `claude-sonnet-5-5` | `high` |
+| 4 | Architecture, complex mechanics and algorithms, money and user (player) data, security, reviewing others' work when errors are costly | `claude-opus-5-5` | `high` |
 
-`claude-fable-5-1` (сильнее и дороже Opus) и effort `xhigh` / `max` — только если пользователь сам попросил.
+`claude-fable-5-1` (stronger and pricier than Opus) and effort `xhigh` / `max` only if the user asks.
 
-Порядок по цене и силе: Haiku < Sonnet < Opus < Fable. Дорогие модели быстрее расходуют и лимит подписки.
-Если вышли новые модели, бери актуальные ID той же линейки.
+Price/strength order: Haiku < Sonnet < Opus < Fable. Expensive models also burn the subscription limit faster. If newer models exist, use the current IDs of the same line.
 
-## Как определить ступень
+## Picking the step
 
-Ответь на три вопроса и возьми самую высокую ступень из ответов:
+Answer three questions, take the highest step:
 
-1. **Ясно, что и где менять?** Да — 1–2. Нет, сначала надо разобраться — от 3.
-2. **Сколько затронуто?** Один-два файла по образцу — 2. Несколько связанных файлов — 3. Меняется устройство системы — 4.
-3. **Цена ошибки?** Ошибку легко заметить и откатить — ниже. Деньги, данные, безопасность, необратимые действия — 4.
+1. **Is it clear what and where to change?** Yes: 1–2. No, needs investigation first: 3+.
+2. **How much is touched?** One or two files by pattern: 2. Several related files: 3. System design changes: 4.
+3. **Cost of error?** Easy to spot and roll back: lower. Money, data, security, irreversible actions: 4.
 
-## Где применять
+## Where to apply
 
-- **Новая сессия в приложении Claude (`start_session`).**
-  Вида «предложить новую сессию» только текстом не бывает — всегда вызывай `start_session`:
-  - задача, которую пользователь назвал в последнем сообщении, — `initiation: "offer"`: только `title`, отдельным
-    вызовом в начале сообщения. Перед вызовом — строка-заголовок и одна фраза с выбором модели и effort; бриф
-    отправляется вторым вызовом с `proposal_id`, когда пользователь выбрал «New session»;
-  - независимая следующая задача, которую заметил ты сам (не продолжение текущей), — `initiation: "own_initiative"`
-    с полным брифом, `model` (полный ID из таблицы) и `effort`;
-  - `initiation: "user_asked"` (стартует сразу, без карточки) — только если пользователь в последнем сообщении
-    дословно попросил запустить сессию прямо сейчас («запусти сразу», «start it now»). Во всех остальных случаях,
-    включая «вынеси в отдельную сессию» и «сделай задачу», — только карточка (`offer` / `own_initiative`).
-  Вопрос пользователю (карточка) обязателен всегда. Фразы вроде «Запускаю сессию» без карточки запрещены.
-  Если `start_session` не загружен (отложенный инструмент), сначала загрузи его через `ToolSearch` с запросом
-  `select:mcp__ccd_session__start_session`, отдельным сообщением.
-  **Параметры.** У `offer` модель и effort передать нельзя: ни первый вызов (только `title`), ни второй (только
-  `proposal_id`, `prompt`, `background`) их не принимают — сессия стартует с тем, что выбрано на карточке, обычно
-  с параметрами родителя. А у `own_initiative` и `user_asked` `start_session` ограничивает модель и effort значениями
-  родителя: запрошенный `high` при родителе на `medium` станет `medium`, хотя карточка покажет запрошенное. Поэтому
-  при любом `initiation`:
-  1. Перед запуском сравни модель и effort по лестнице со своими. Если лестница требует больше, чем у тебя, скажи
-     об этом одной строкой и всё равно запускай.
-  2. После запуска, когда `start_session` вернул id сессии, проверь реальные значения через
-     `mcp__ccd_session_mgmt__get_session`. Если модель или effort ниже рекомендованных, выставь рекомендованные через
-     `mcp__ccd_session_mgmt__set_session_model` и `mcp__ccd_session_mgmt__set_session_effort` (приложение спросит
-     пользователя по каждому изменению). Итог сообщи одной строкой с реальными значениями.
-- **Сабагент (инструмент `Agent`).** `model` принимает псевдонимы `haiku` / `sonnet` / `opus`, `effort` — по таблице.
-  Поиск строки и чтение — `haiku` + `low`; если сабагент должен понять, как устроен незнакомый код, а не найти место, — `sonnet` + `medium`. Для `subagent_type: "fork"` модель не задаётся: форк всегда на модели сессии.
-- **Терминал (Claude Code CLI).** `start_session` там нет: следующую задачу предложи начать после `/clear` или в новом
-  окне `claude` и дай бриф одним блоком для вставки. Модель пользователь меняет командой `/model`.
-- **Текущая сессия.** Свою модель сессия сменить не может. Если впереди много работы явно ниже или выше уровня
-  текущей модели — одной строкой предложи пользователю переключить модель.
+- **New session in the Claude app (`start_session`).** Never "offer a new session" in text only — always call `start_session`:
+  - a task the user named in their last message: `initiation: "offer"`, only `title`, as a separate call at the start of the message. Before the call: a title line and one sentence with the chosen model and effort; the brief goes in a second call with `proposal_id` once the user picks "New session";
+  - an independent next task you noticed yourself (not a continuation of the current one): `initiation: "own_initiative"` with a full brief, `model` (full ID from the table) and `effort`;
+  - `initiation: "user_asked"` (starts at once, no card) only if the user's last message literally asked to start the session right now ("start it now"). In all other cases, including "move it to a separate session" and "do the task", only a card (`offer` / `own_initiative`).
+  Asking the user (the card) is always mandatory. Saying "Starting a session" without a card is forbidden.
+  If `start_session` is not loaded (deferred tool), first load it via `ToolSearch` with query `select:mcp__ccd_session__start_session`, in a separate message.
+  **Parameters.** `offer` takes no model/effort (first call: only `title`; second: only `proposal_id`, `prompt`, `background`) — the session starts with what the card selects, usually the parent's settings. `own_initiative` and `user_asked` cap model and effort at the parent's: requested `high` under a `medium` parent becomes `medium`, though the card shows the requested value. So for any `initiation`:
+  1. Before launch, compare the ladder's model/effort with yours. If the ladder needs more, say so in one line and launch anyway.
+  2. After launch, when `start_session` returns the session id, check the real values via `mcp__ccd_session_mgmt__get_session`. If model or effort is below the recommended, set them via `mcp__ccd_session_mgmt__set_session_model` and `mcp__ccd_session_mgmt__set_session_effort` (the app asks the user per change). Report the outcome in one line with the real values.
+- **Subagent (`Agent`).** `model` takes aliases `haiku` / `sonnet` / `opus`, `effort` per the table. Finding a line / reading: `haiku` + `low`; if the subagent must understand how unfamiliar code works rather than locate something: `sonnet` + `medium`. `subagent_type: "fork"` takes no model: a fork always uses the session's model.
+- **Terminal (Claude Code CLI).** No `start_session`: suggest starting the next task after `/clear` or in a new `claude` window, and give the brief as one paste-ready block. The user changes model with `/model`.
+- **Current session.** A session cannot change its own model. If much work ahead is clearly below or above the current model's level, suggest in one line that the user switch models.
 
-Выбор объявляй одной строкой в сообщении о запуске, например: «Sonnet 5.5 / high — фича в трёх файлах, причина ясна».
+State the choice in one line in the launch message, e.g. "Sonnet 5.5 / high — three-file feature, cause is clear".
 
-## Если модель не тянет
+## If the model falls short
 
-Две неудачные попытки на одной ступени — скажи об этом прямо и поднимись на одну ступень (1 → 2 → 3 → 4), а не
-пробуй в третий раз. Для уже запущенной сессии в приложении можно предложить `set_session_model` — приложение
-спросит пользователя. На ступени 4 — к пользователю: разбить задачу или взять Fable.
+Two failed attempts at one step: say so plainly and go up one step (1 → 2 → 3 → 4); don't try a third time. For a running app session you can suggest `set_session_model` — the app asks the user. At step 4: go to the user — split the task or use Fable.
 
-## Одна задача — одна сессия
+## One task, one session
 
-Каждое сообщение заново отправляет модели всю историю, поэтому длинная сессия дорожает с каждым шагом.
+Every message resends the whole history, so a long session gets pricier each step.
 
-- Задача сделана (и закоммичена) и осталась **независимая** следующая задача — предложи её карточкой
-  `own_initiative` с коротким брифом: что сделано, что дальше, какие файлы, где план. Модель и effort — по лестнице
-  выше. Если такой задачи нет, ничего не предлагай и не выдумывай.
-- Прямое продолжение только что сделанного (следующая итерация, «давай, делай» после анализа, правка по итогам),
-  вопросы и мелкие правки остаются в этой же сессии: контекст уже есть, новой сессии пришлось бы разбираться заново.
-  В новую сессию уходит только то, чему история этой сессии не нужна.
-- Хук-сторож из этого плагина напоминает, когда контекст перевалил за порог (по умолчанию 150 тыс. токенов):
-  тогда новую задачу — тем более в новую сессию.
+- Task done (and committed) and an **independent** next task remains: offer it via an `own_initiative` card with a short brief: what's done, what's next, which files, where the plan is. Model and effort per the ladder. If there's no such task, offer nothing and invent nothing.
+- Direct continuation of what was just done (next iteration, "go ahead" after analysis, fixes from results), questions and small edits stay in this session: the context is already here, a new session would have to rebuild it. Only work that doesn't need this session's history goes to a new session.
+- This plugin's watchdog hook reminds you when context passes the threshold (default 150k tokens): then a new task, even more so, goes to a new session.

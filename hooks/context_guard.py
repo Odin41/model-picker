@@ -1,18 +1,18 @@
-"""Хук UserPromptSubmit: сторож длины сессии (плагин model-picker).
+"""UserPromptSubmit hook: session-length watchdog (model-picker plugin).
 
-Каждое сообщение заново отправляет модели всю историю сессии, поэтому длинная сессия дорожает с каждым шагом.
-Скрипт берёт размер контекста последнего ответа из транскрипта и, если он больше порога:
-- добавляет Claude напоминание: новую задачу или следующий шаг — предложить в новой сессии;
-- пользователю один раз на каждом пороге (порог, +100 тыс., +200 тыс.) показывает строку в интерфейсе.
-Порог задаёт переменная окружения CONTEXT_GUARD_WARN (в токенах, по умолчанию 150000).
-Никогда не мешает работе: любая ошибка — тихий выход с кодом 0.
+Every message resends the whole session history, so a long session gets pricier each step.
+The script reads the context size of the last reply from the transcript and, if it exceeds the threshold:
+- adds a reminder for Claude: offer a new task or next step in a new session;
+- shows the user one UI line at each level (threshold, +100k, +200k).
+The threshold is set by the CONTEXT_GUARD_WARN env var (tokens, default 150000).
+Never blocks work: any error is a silent exit with code 0.
 """
 import json
 import os
 import sys
 
 DEFAULT_WARN = 150_000
-STEP = 100_000              # следующие пороги для строки пользователю: WARN + STEP, WARN + 2 * STEP
+STEP = 100_000              # next levels for the user line: WARN + STEP, WARN + 2 * STEP
 TAIL_BYTES = 4 * 1024 * 1024
 KEEP_SESSIONS = 100
 
@@ -26,13 +26,13 @@ def warn_threshold():
 
 
 def state_path():
-    """Состояние — в папке данных плагина (переживает обновления), без плагина — рядом со скриптом."""
+    """State lives in the plugin data dir (survives updates); without a plugin, next to the script."""
     base = os.environ.get("CLAUDE_PLUGIN_DATA") or os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base, ".context_guard.json")
 
 
 def last_context(path):
-    """Размер входа последнего ответа ассистента: input + чтение кэша + запись в кэш."""
+    """Input size of the last assistant reply: input + cache read + cache write."""
     with open(path, "rb") as f:
         f.seek(0, os.SEEK_END)
         f.seek(max(0, f.tell() - TAIL_BYTES))
@@ -57,7 +57,7 @@ def last_context(path):
 
 
 def new_level(session, ctx, levels):
-    """Самый высокий порог из levels, который ещё не объявляли в этой сессии, иначе 0. Запоминает объявленный."""
+    """Highest level in levels not yet announced in this session, else 0. Remembers the announced one."""
     path = state_path()
     try:
         with open(path, encoding="utf-8") as f:
@@ -69,7 +69,7 @@ def new_level(session, ctx, levels):
     level = max((n for n in levels if ctx >= n), default=0)
     if level <= state.get(session, 0):
         return 0
-    state.pop(session, None)                    # обновлённую сессию — в конец, чтобы чистка её не тронула
+    state.pop(session, None)                    # move the updated session to the end so pruning keeps it
     state[session] = level
     state = dict(list(state.items())[-KEEP_SESSIONS:])
     tmp = "{0}.{1}.tmp".format(path, os.getpid())
@@ -77,7 +77,7 @@ def new_level(session, ctx, levels):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(state, f)
-        os.replace(tmp, path)                   # атомарно: параллельные сессии не испортят файл
+        os.replace(tmp, path)                   # atomic: parallel sessions cannot corrupt the file
     except OSError:
         try:
             os.remove(tmp)
@@ -99,19 +99,19 @@ def main():
     out = {"hookSpecificOutput": {
         "hookEventName": "UserPromptSubmit",
         "additionalContext": (
-            "Сторож сессии: контекст ~{0} тыс. токенов (порог {1} тыс.), каждый шаг заново отправляет всю историю. "
-            "Если сообщение пользователя — новая задача, следующий шаг плана или работа, которой эта история не нужна, "
-            "сначала предложи вынести её в новую сессию с коротким брифом: что сделано, что дальше, какие файлы, где план. "
-            "В приложении Claude — всегда вызов start_session, не текст: задача из последнего сообщения пользователя — "
-            "initiation \"offer\" (только title, отдельным вызовом в начале сообщения), независимая задача, которую "
-            "заметил ты сам, — \"own_initiative\" с брифом;\"user_asked\" (старт без карточки) — только если пользователь "
-            "в последнем сообщении дословно попросил запустить сессию сразу, иначе карточка обязательна всегда. "
-            "Перед каждым start_session и Agent обязательно загрузи скилл pick-model. Если start_session не загружен, сначала ToolSearch "
-            "\"select:mcp__ccd_session__start_session\" отдельным сообщением. Модель и effort — по скиллу pick-model; "
-            "offer их не принимает, а остальные запуски ограничены значениями родителя, поэтому после запуска проверь get_session и при нехватке "
-            "выставь рекомендованные через set_session_model и set_session_effort. "
-            "В терминале — предложи /clear или новое окно claude и дай бриф одним блоком. "
-            "Вопрос, мелкую правку или доделку текущей задачи делай здесь."
+            "Session watchdog: context ~{0}k tokens (threshold {1}k); every step resends the whole history. "
+            "If the user's message is a new task, the plan's next step, or work that doesn't need this history, "
+            "first offer to move it to a new session with a short brief: what's done, what's next, which files, where the plan is. "
+            "In the Claude app always call start_session, not text: a task from the user's last message is "
+            "initiation \"offer\" (only title, separate call at the start of the message), an independent task you "
+            "noticed yourself is \"own_initiative\" with a brief; \"user_asked\" (starts without a card) only if the user "
+            "literally asked in the last message to start the session now, otherwise the card is always mandatory. "
+            "Always load the pick-model skill before every start_session and Agent. If start_session is not loaded, first ToolSearch "
+            "\"select:mcp__ccd_session__start_session\" in a separate message. Model and effort per the pick-model skill; "
+            "offer takes none and other launches are capped at the parent's values, so after launch check get_session and, if short, "
+            "set the recommended via set_session_model and set_session_effort. "
+            "In the terminal, suggest /clear or a new claude window and give the brief as one block. "
+            "Do a question, small edit, or finishing the current task here."
         ).format(k, warn // 1000),
     }}
     if new_level(data.get("session_id") or "?", ctx, (warn, warn + STEP, warn + 2 * STEP)):
@@ -124,6 +124,6 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except Exception:       # хук не должен ломать отправку сообщения
+    except Exception:       # the hook must not break message submission
         pass
     sys.exit(0)
