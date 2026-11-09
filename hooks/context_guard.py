@@ -2,7 +2,7 @@
 
 Every message resends the whole session history, so a long session gets pricier each step.
 The script reads the context size of the last reply from the transcript and, if it exceeds the threshold:
-- adds a reminder for Claude: offer a new task or next step in a new session;
+- adds a reminder for Claude: a full mandatory instruction at each new level, a short one in between;
 - shows the user one UI line at each level (threshold, +100k, +200k).
 The threshold is set by the CONTEXT_GUARD_WARN env var (tokens, default 150000).
 Never blocks work: any error is a silent exit with code 0.
@@ -96,25 +96,34 @@ def main():
     if ctx < warn:
         return
     k = round(ctx / 1000)
-    out = {"hookSpecificOutput": {
-        "hookEventName": "UserPromptSubmit",
-        "additionalContext": (
-            "Session watchdog: context ~{0}k tokens (threshold {1}k); every step resends the whole history. "
-            "If the user's message is a new task, the plan's next step, or work that doesn't need this history, "
-            "first offer to move it to a new session with a short brief: what's done, what's next, which files, where the plan is. "
-            "In the Claude app always call start_session, not text: a task from the user's last message is "
-            "initiation \"offer\" (only title, separate call at the start of the message), an independent task you "
-            "noticed yourself is \"own_initiative\" with a brief; \"user_asked\" (starts without a card) only if the user "
-            "literally asked in the last message to start the session now, otherwise the card is always mandatory. "
-            "Always load the pick-model skill before every start_session and Agent. If start_session is not loaded, first ToolSearch "
-            "\"select:mcp__ccd_session__start_session\" in a separate message. Model and effort per the pick-model skill; "
-            "offer takes none and other launches are capped at the parent's values, so after launch check get_session and, if short, "
-            "set the recommended via set_session_model and set_session_effort. "
+    level = new_level(data.get("session_id") or "?", ctx, (warn, warn + STEP, warn + 2 * STEP))
+    if level:
+        # A new level was just reached: an unconditional instruction (a conditional "if it is a new task"
+        # was ignored in practice, because every message in a long session looks like a continuation).
+        note = (
+            "Session watchdog, MANDATORY: context ~{0}k tokens (threshold {1}k); every step resends the whole history, "
+            "and the user was just warned in the UI. Do NOT stay silent and do NOT wait for a new task: even if the "
+            "user's message is a plain continuation, at the first natural stopping point of this turn (not mid-edit) "
+            "tell the user in one line that the session is long and offer to continue in a new session with a short "
+            "brief: what's done, what's next, which files, where the plan is. "
+            "In the Claude app do it with start_session, not text: initiation \"own_initiative\", context \"fresh\", full "
+            "brief (the card is the user's consent); if the user's last message names a separate task, use \"offer\" "
+            "(only title, separate call at the start of the message); \"user_asked\" only if the user literally asked "
+            "to start it now. Load the pick-model skill before start_session and Agent. If start_session is not loaded, "
+            "first ToolSearch \"select:mcp__ccd_session__start_session\" in a separate message. Model and effort per "
+            "pick-model; offer takes none and other launches are capped at the parent's values, so after launch check "
+            "get_session and, if short, set the recommended via set_session_model and set_session_effort. "
             "In the terminal, suggest /clear or a new claude window and give the brief as one block. "
-            "Do a question, small edit, or finishing the current task here."
-        ).format(k, warn // 1000),
-    }}
-    if new_level(data.get("session_id") or "?", ctx, (warn, warn + STEP, warn + 2 * STEP)):
+            "If the user declines, continue here and do not repeat until the next level."
+        ).format(k, warn // 1000)
+    else:
+        note = (
+            "Session watchdog: context ~{0}k tokens (threshold {1}k). If you have not yet offered a new session "
+            "since the last warning, do it at the next natural stopping point (see pick-model skill); "
+            "if the user already declined, say nothing."
+        ).format(k, warn // 1000)
+    out = {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": note}}
+    if level:
         out["systemMessage"] = (
             "Сессия длинная: ~{0} тыс. токенов контекста, каждое сообщение отправляет всю историю заново. "
             "Следующую задачу дешевле начать в новой сессии.".format(k))
