@@ -112,7 +112,7 @@ def main():
             "to start it now. Load the pick-model skill before start_session and Agent. If start_session is not loaded, "
             "first ToolSearch \"select:mcp__ccd_session__start_session\" in a separate message. Model and effort per "
             "pick-model; offer takes none and other launches are capped at the parent's values, so after launch check "
-            "get_session and, if short, set the recommended via set_session_model and set_session_effort. "
+            "get_session and, if either differs (lower or higher), set the recommended via set_session_model and set_session_effort yourself, never leave it to the user. "
             "In the terminal, suggest /clear or a new claude window and give the brief as one block. "
             "If the user declines, continue here and do not repeat until the next level."
         ).format(k, warn // 1000)
